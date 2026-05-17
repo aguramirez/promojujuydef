@@ -14,21 +14,15 @@ export async function POST() {
     });
 
     for (const promo of expiredPromos) {
-      // 1. Delete compressed image
-      if (promo.imageUrl) {
+      // 1. Delete compressed image (only if it is a local file path, not a base64 string)
+      if (promo.imageUrl && !promo.imageUrl.startsWith("data:")) {
         const compressedPath = path.join(process.cwd(), "public", promo.imageUrl);
-        const originalFilename = path.basename(promo.imageUrl).replace('.webp', '');
         
         try {
           await unlink(compressedPath);
         } catch (e) {
           console.error("Could not delete compressed image", compressedPath);
         }
-
-        // 2. Delete original image (searching by basename)
-        // This assumes we can find the original with the same basename but different extension
-        // Since we don't store the original path, we'd need to search or store it.
-        // For simplicity, let's just delete the DB record.
       }
       
       await prisma.promotion.delete({ where: { id: promo.id } });

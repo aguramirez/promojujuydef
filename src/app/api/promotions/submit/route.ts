@@ -25,12 +25,14 @@ export async function POST(req: Request) {
     let imageUrl = "";
     if (image && image.size > 0) {
       const buffer = Buffer.from(await image.arrayBuffer());
-      const filename = `${Date.now()}-${image.name.replace(/\s/g, "-")}`;
-      const compressedFilename = filename.split(".")[0] + ".webp";
-      const compressedPath = path.join(process.cwd(), "public/uploads/compressed", compressedFilename);
+      
+      // Compress and resize with sharp in-memory to ensure it remains small
+      const compressedBuffer = await sharp(buffer)
+        .resize({ width: 800, height: 800, fit: "inside", withoutEnlargement: true })
+        .webp({ quality: 75 })
+        .toBuffer();
 
-      await sharp(buffer).webp({ quality: 80 }).toFile(compressedPath);
-      imageUrl = `/uploads/compressed/${compressedFilename}`;
+      imageUrl = `data:image/webp;base64,${compressedBuffer.toString("base64")}`;
     }
 
     const promotion = await prisma.promotion.create({

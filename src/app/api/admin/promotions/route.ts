@@ -39,21 +39,14 @@ export async function POST(req: Request) {
     if (!image) return NextResponse.json({ error: "Imagen requerida" }, { status: 400 });
 
     const buffer = Buffer.from(await image.arrayBuffer());
-    const filename = `${Date.now()}-${image.name.replace(/\s/g, "-")}`;
 
-    const originalPath = path.join(process.cwd(), "public/uploads/original", filename);
-    const compressedFilename = filename.split(".")[0] + ".webp";
-    const compressedPath = path.join(process.cwd(), "public/uploads/compressed", compressedFilename);
+    // Compress and resize with sharp in-memory to ensure it remains small
+    const compressedBuffer = await sharp(buffer)
+      .resize({ width: 800, height: 800, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 75 })
+      .toBuffer();
 
-    // Ensure dirs exist
-    await mkdir(path.join(process.cwd(), "public/uploads/original"), { recursive: true });
-    await mkdir(path.join(process.cwd(), "public/uploads/compressed"), { recursive: true });
-
-    // Save original
-    await writeFile(originalPath, buffer);
-
-    // Compress with sharp
-    await sharp(buffer).webp({ quality: 80 }).toFile(compressedPath);
+    const imageUrl = `data:image/webp;base64,${compressedBuffer.toString("base64")}`;
 
     const promotion = await prisma.promotion.create({
       data: {
@@ -66,7 +59,7 @@ export async function POST(req: Request) {
         mapsUrl: mapsUrl || null,
         status,
         published: true, // Admin-created promotions are published immediately
-        imageUrl: `/uploads/compressed/${compressedFilename}`,
+        imageUrl,
         categoryId: categoryId || null,
       },
       include: { category: true },

@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-primary: #E63333;
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+@keyframes ai-gradient-wave {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.ai-glow-border {
+  position: relative;
+  padding: 2px;
+  border-radius: 1.5rem; /* Rounded 2xl or full depending on usage */
+  overflow: hidden;
+}
+
+.ai-glow-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #4b00ad, #00d2ff, #ff00d2, #00d2ff, #4b00ad);
+  background-size: 300% 100%;
+  animation: ai-gradient-wave 12s ease-in-out infinite;
+}
+
+.ai-glow-bg {
+  background: linear-gradient(90deg, #4b00ad, #00d2ff, #ff00d2, #00d2ff, #4b00ad);
+  background-size: 300% 100%;
+  animation: ai-gradient-wave 12s ease-in-out infinite;
+}
+
+/* Hide scrollbar but allow scrolling */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

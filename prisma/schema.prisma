@@ -1,0 +1,58 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PromotionStatus {
+  ESTRELLA
+  IMPORTANTE
+  NORMAL
+  ULTIMO
+}
+
+model Category {
+  id         String      @id @default(uuid())
+  name       String      @unique
+  promotions Promotion[]
+}
+
+model Promotion {
+  id          String          @id @default(uuid())
+  storeName   String
+  title       String?
+  imageUrl    String
+  description String          @db.Text
+  startDate   DateTime
+  endDate     DateTime
+  ctaUrl      String
+  mapsUrl     String?
+  status      PromotionStatus @default(NORMAL)
+  published   Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  categoryId  String?
+  category    Category?       @relation(fields: [categoryId], references: [id])
+
+  @@index([startDate, endDate])
+}
+
+model Admin {
+  id       String @id @default(uuid())
+  username String @unique
+  password String
+}
+
+model Lead {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  whatsapp  String
+  createdAt DateTime @default(now())
+}

@@ -37,6 +37,18 @@ export default function ChatBox() {
     }
   }, []);
 
+  // Prevent landing page scroll when chat is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.classList.add("overflow-hidden");
+    } else {
+      document.body.classList.remove("overflow-hidden");
+    }
+    return () => {
+      document.body.classList.remove("overflow-hidden");
+    };
+  }, [isOpen]);
+
   // Save history to localStorage
   useEffect(() => {
     if (messages.length > 0) {

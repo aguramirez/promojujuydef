@@ -14,11 +14,11 @@ export async function POST(req: Request) {
 
     // 1. Fetch all published promotions
     // We fetch all published ones so the IA can also talk about upcoming promos
-    const allPromotions = await prisma.promotion.findMany({
-      where: { published: true },
-      include: { category: true },
-      orderBy: { status: 'asc' }
-    });
+    const allPromotions = (await prisma.promotion.findMany({
+      where: { published: true } as any,
+      include: { category: true } as any,
+      orderBy: { status: 'asc' } as any
+    })) as any[];
 
     // 2. Format data concisely for tokens
     const nowArg = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     // 3. Prepare System Prompt (Optimized for tokens)
     const systemPrompt = `Eres el asistente de PROMO JUJUY. 
 Reglas:
-- Habla en español jujeño/norteño amigable y conciso.
+- Habla en español argentino amigable y conciso.
 - Hoy es ${todayStr} (Argentina).
 - Usa SOLO este JSON de promos: ${JSON.stringify(compactPromos)}
 - Si una promo no empezó o terminó, mencionalo.

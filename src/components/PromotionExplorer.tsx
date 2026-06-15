@@ -21,6 +21,7 @@ interface Promotion {
   mapsUrl?: string | null;
   status: string;
   category?: Category | null;
+  dias?: string[];
 }
 
 const TZ = "America/Argentina/Buenos_Aires";
@@ -67,10 +68,16 @@ export default function PromotionExplorer({ allPromotions }: { allPromotions: Pr
     const selStart = selectedDate.getTime();
     const selEnd   = selStart + 86_400_000 - 1; // end of day
 
+    const DAYS_ES = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
+    const selectedDayName = DAYS_ES[selectedDate.getDay()];
+
     const filtered = allPromotions
       .filter((p) => {
         // Category filter
         if (selectedCategory && p.category?.id !== selectedCategory) return false;
+
+        // Day of week filter
+        if (p.dias && p.dias.length > 0 && !p.dias.includes(selectedDayName)) return false;
 
         // Date range: promo active during selected day
         const start = new Date(p.startDate).getTime();

@@ -32,6 +32,7 @@ model Promotion {
   endDate     DateTime
   ctaUrl      String
   mapsUrl     String?
+  dias        String[]        @default([])
   status      PromotionStatus @default(NORMAL)
   published   Boolean         @default(false)
   createdAt   DateTime        @default(now())
@@ -41,6 +42,21 @@ model Promotion {
   category    Category?       @relation(fields: [categoryId], references: [id])
 
   @@index([startDate, endDate])
+}
+
+model Event {
+  id          String          @id @default(uuid())
+  storeName   String
+  title       String?
+  imageUrl    String
+  description String          @db.Text
+  date        DateTime
+  ctaUrl      String
+  mapsUrl     String?
+  status      PromotionStatus @default(NORMAL)
+  published   Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 }
 
 model Admin {

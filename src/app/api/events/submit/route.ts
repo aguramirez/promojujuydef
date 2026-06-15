@@ -1,31 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { writeFile } from "fs/promises";
-import path from "path";
 import sharp from "sharp";
 
-// Public endpoint: submit a promotion for approval (published = false by default)
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
     const storeName = formData.get("storeName") as string;
     const title = (formData.get("title") as string) || null;
     const description = formData.get("description") as string;
-    const startDate = new Date((formData.get("startDate") as string) + "T12:00:00");
-    const endDate = new Date((formData.get("endDate") as string) + "T12:00:00");
+    const date = new Date((formData.get("date") as string) + "T12:00:00");
     const ctaUrl = (formData.get("ctaUrl") as string) || "";
     const mapsUrl = (formData.get("mapsUrl") as string) || null;
-    const categoryId = (formData.get("categoryId") as string) || null;
     const image = formData.get("image") as File;
-    const diasStr = formData.get("dias") as string;
-    let dias: string[] = [];
-    if (diasStr) {
-      try {
-        dias = JSON.parse(diasStr);
-      } catch (e) {
-        dias = diasStr.split(",").map(d => d.trim());
-      }
-    }
 
     if (!storeName || !description) {
       return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
@@ -35,7 +21,6 @@ export async function POST(req: Request) {
     if (image && image.size > 0) {
       const buffer = Buffer.from(await image.arrayBuffer());
       
-      // Compress and resize with sharp in-memory to ensure it remains small
       const compressedBuffer = await sharp(buffer)
         .resize({ width: 800, height: 800, fit: "inside", withoutEnlargement: true })
         .webp({ quality: 75 })
@@ -44,25 +29,22 @@ export async function POST(req: Request) {
       imageUrl = `data:image/webp;base64,${compressedBuffer.toString("base64")}`;
     }
 
-    const promotion = await prisma.promotion.create({
+    const event = await prisma.event.create({
       data: {
         storeName,
         title: title || null,
         description,
-        startDate,
-        endDate,
+        date,
         ctaUrl: ctaUrl || "#",
         mapsUrl: mapsUrl || null,
         imageUrl,
-        published: false, // always starts unpublished
-        categoryId: categoryId || null,
-        dias,
+        published: false,
       },
     });
 
-    return NextResponse.json({ success: true, id: promotion.id });
+    return NextResponse.json({ success: true, id: event.id });
   } catch (error) {
-    console.error("Public submit error:", error);
-    return NextResponse.json({ error: "Error al guardar la promoción" }, { status: 500 });
+    console.error("Event submit error:", error);
+    return NextResponse.json({ error: "Error al guardar el evento" }, { status: 500 });
   }
 }

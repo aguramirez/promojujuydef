@@ -54,7 +54,20 @@ export default function WeeklyCalendar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!todayBA) return null;
+  if (!todayBA) return (
+    <div className="w-full px-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="w-8 h-8 rounded-full bg-neutral-100 dark:bg-neutral-800 animate-pulse" />
+        <div className="w-24 h-4 rounded bg-neutral-100 dark:bg-neutral-800 animate-pulse" />
+        <div className="w-8 h-8 rounded-full bg-neutral-100 dark:bg-neutral-800 animate-pulse" />
+      </div>
+      <div className="flex gap-1.5 sm:gap-2">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div key={i} className="flex-1 h-14 rounded-2xl bg-neutral-100 dark:bg-neutral-800 animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
 
   /** For week `w` and weekday index `d` (0=Mon), return the real Date */
   const dateFor = (week: number, dayIdx: number): Date => {

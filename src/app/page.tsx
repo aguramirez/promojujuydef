@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import PromotionExplorer from "@/components/PromotionExplorer";
 import ChatBox from "@/components/ai/ChatBox";
 import Image from "next/image";
+import SponsorsStrip from "@/components/SponsorsStrip";
 
 export const revalidate = 60; // Cache page for 60 seconds (ISR) for ultra-fast load times
 
@@ -49,6 +50,9 @@ export default async function Home() {
           </a>
         </div>
       </section>
+
+      {/* Sponsors Strip - Hero */}
+      <SponsorsStrip variant="hero" />
 
       {/* Promotion Content */}
       <PromotionExplorer allPromotions={JSON.parse(JSON.stringify(allPromotions))} />

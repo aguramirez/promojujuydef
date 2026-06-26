@@ -5,6 +5,7 @@ import "./globals.css";
 
 import Image from "next/image";
 import MobileUploadMenu from "@/components/MobileUploadMenu";
+import SponsorsStrip from "@/components/SponsorsStrip";
 
 const poppins = Poppins({
   variable: "--font-poppins",
@@ -134,8 +135,11 @@ export default function RootLayout({
           {children}
         </main>
 
-        <footer className="w-full bg-neutral-50 dark:bg-neutral-950 border-t border-neutral-200 dark:border-neutral-800 py-8 mt-12">
-          <div className="max-w-7xl mx-auto px-4 flex flex-col items-center gap-4">
+        <footer className="w-full bg-neutral-50 dark:bg-neutral-950 border-t border-neutral-200 dark:border-neutral-800 mt-12">
+          {/* Sponsors - Footer (más grandes) */}
+          <SponsorsStrip variant="footer" />
+
+          <div className="max-w-7xl mx-auto px-4 flex flex-col items-center gap-4 py-8">
             <Link href="/" className="flex items-center gap-2 opacity-50 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
               <Image src="/logo.svg" alt="Promo Jujuy Logo" width={24} height={24} className="h-6 w-auto" />
               <span className="font-bold text-sm tracking-tight text-neutral-600 dark:text-neutral-400">PROMO JUJUY</span>

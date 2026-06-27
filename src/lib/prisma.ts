@@ -11,7 +11,10 @@ if (connectionString && connectionString.includes("sslmode=require")) {
 }
 
 const pool = new Pool({ 
-  connectionString 
+  connectionString,
+  max: 3,                      // límite conexiones simultáneas
+  idleTimeoutMillis: 10_000,   // descarta conexiones ociosas tras 10s
+  connectionTimeoutMillis: 10_000, // error si no conecta en 10s
 });
 const adapter = new PrismaPg(pool);
 

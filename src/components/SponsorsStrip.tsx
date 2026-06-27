@@ -26,10 +26,10 @@ export default function SponsorsStrip({ variant = "hero" }: SponsorsStripProps) 
 
   return (
     <div
-      className={`w-full overflow-hidden ${
+      className={`w-full overflow-hidden bg-white dark:bg-neutral-900 ${
         isFooter
           ? "py-6 border-t border-neutral-200 dark:border-neutral-800"
-          : "py-2 border-t border-b border-neutral-100 dark:border-neutral-800/60"
+          : "py-2 border-t border-b border-neutral-100 dark:border-neutral-800"
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

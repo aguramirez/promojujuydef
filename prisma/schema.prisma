@@ -1,19 +1,9 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-}
-
-enum PromotionStatus {
-  ESTRELLA
-  IMPORTANTE
-  NORMAL
-  ULTIMO
 }
 
 model Category {
@@ -25,20 +15,19 @@ model Category {
 model Promotion {
   id          String          @id @default(uuid())
   storeName   String
-  title       String?
   imageUrl    String
-  description String          @db.Text
+  description String
   startDate   DateTime
   endDate     DateTime
   ctaUrl      String
-  mapsUrl     String?
-  dias        String[]        @default([])
   status      PromotionStatus @default(NORMAL)
-  published   Boolean         @default(false)
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
-
   categoryId  String?
+  mapsUrl     String?
+  published   Boolean         @default(false)
+  title       String?
+  dias        String[]        @default([])
   category    Category?       @relation(fields: [categoryId], references: [id])
 
   @@index([startDate, endDate])
@@ -49,7 +38,7 @@ model Event {
   storeName   String
   title       String?
   imageUrl    String
-  description String          @db.Text
+  description String
   date        DateTime
   ctaUrl      String
   mapsUrl     String?
@@ -71,4 +60,11 @@ model Lead {
   email     String   @unique
   whatsapp  String
   createdAt DateTime @default(now())
+}
+
+enum PromotionStatus {
+  ESTRELLA
+  IMPORTANTE
+  NORMAL
+  ULTIMO
 }

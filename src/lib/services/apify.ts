@@ -33,11 +33,12 @@ export async function fetchLatestInstagramPosts(
     
     // Configuration for the official apify/instagram-scraper
     const input = {
-      usernames: [username],
+      directUrls: [`https://www.instagram.com/${username}/`],
+      resultsType: "posts",
       resultsLimit: maxPosts,
-      scrapeType: "posts",
       proxyConfiguration: {
         useApifyProxy: true,
+        apifyProxyGroups: ["RESIDENTIAL"],
       },
     };
 

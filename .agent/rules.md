@@ -65,3 +65,22 @@ You are the AI coding assistant for the "PROMO JUJUY" project. This document ser
 - Always prioritize performance and mobile-first responsiveness.
 - Write clean, modular, and strongly-typed TypeScript code.
 - Wait for explicit user confirmation before installing packages or writing large blocks of implementation code.
+
+## 7. Autonomous Multi-Agent System (LangGraph, Apify, RAG & Neon pgvector)
+- **Instagram Scraping Pipeline:**
+  - Uses Apify platform (`apify-client`) via free-tier platform credits ($5 USD/mo).
+  - Monitored Instagram profiles stored in `MonitoredInstagram` Prisma model.
+- **Multi-Agent Workflow (LangGraph JS):**
+  - **Classifier Node:** Uses `@langchain/google-genai` (Gemini 1.5 Flash) to categorize posts into `PROMOTION`, `EVENT`, or `NONE` (discard).
+  - **RAG Duplicate Filter:** Uses `pgvector` in Neon Postgres to generate embeddings of titles/descriptions. Per-post cosine similarity search (`<=>`) drops duplicate offers (>0.85 threshold).
+  - **Extractor Node:** Uses Structured Outputs (Zod) to map post data to `Promotion` or `Event` model fields (extracting dates, prices, `ctaUrl` for tickets, etc.).
+  - **Validator & Publishing Node:**
+    - Fully valid data $\rightarrow$ automatically published (`published: true`).
+    - Incomplete or invalid data $\rightarrow$ saved as draft (`published: false`) and flagged for manual admin review.
+- **Auditing & Cost Control:**
+  - Token consumption (`promptTokens`, `completionTokens`) and estimated USD cost logged to `AgentLog` model for every execution.
+- **Admin Dashboard Integration (`/admin/dashboard`):**
+  - CRUD interface for `MonitoredInstagram` accounts.
+  - Review queue for pending items (`published: false`).
+  - Analytics dashboard for token usage, execution logs, and estimated API expenses.
+

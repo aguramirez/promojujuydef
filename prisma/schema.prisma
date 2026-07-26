@@ -68,3 +68,33 @@ enum PromotionStatus {
   NORMAL
   ULTIMO
 }
+
+model MonitoredInstagram {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  storeName String
+  createdAt DateTime @default(now())
+}
+
+model AgentLog {
+  id               String   @id @default(uuid())
+  jobName          String
+  postsScraped     Int
+  promosAdded      Int
+  eventsAdded      Int
+  promptTokens     Int
+  completionTokens Int
+  estimatedCost    Float
+  status           String
+  error            String?
+  createdAt        DateTime @default(now())
+}
+
+model ItemEmbedding {
+  id        String   @id @default(uuid())
+  itemId    String   @unique
+  itemType  String
+  embedding Unsupported("vector(768)")?
+  createdAt DateTime @default(now())
+}
+

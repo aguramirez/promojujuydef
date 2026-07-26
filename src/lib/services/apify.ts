@@ -36,7 +36,9 @@ export async function fetchLatestInstagramPosts(
       usernames: [username],
       resultsLimit: maxPosts,
       scrapeType: "posts",
-      onlyPosts: true,
+      proxyConfiguration: {
+        useApifyProxy: true,
+      },
     };
 
     // Run the actor and wait for it to complete
@@ -45,9 +47,12 @@ export async function fetchLatestInstagramPosts(
     // Fetch the scraped results from the dataset
     const { items } = await client.dataset(run.defaultDatasetId).listItems();
     
-    console.log(`Successfully scraped ${items.length} items from @${username}`);
+    // Filter out error payloads or empty objects
+    const validItems = items.filter((item: any) => !item.error && (item.id || item.shortcode));
+    
+    console.log(`Successfully scraped ${validItems.length} valid items from @${username} (out of ${items.length} total)`);
 
-    return items.map((item: any) => {
+    return validItems.map((item: any) => {
       // Map potential fields to normalize the data structure
       const caption = item.caption || item.text || "";
       const imageUrl = item.displayUrl || item.imageUrl || (item.images && item.images[0]) || "";

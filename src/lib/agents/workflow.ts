@@ -193,6 +193,14 @@ async function validateNode(state: AgentState) {
           errors.push("La fecha de finalización no puede ser anterior a la fecha de inicio.");
           isValid = false;
         }
+        
+        // Validar si la promoción ya expiró en relación a hoy
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (end < today) {
+          errors.push("La promoción ya ha finalizado.");
+          isValid = false;
+        }
       }
     }
   } else if (state.itemType === "EVENT") {
@@ -216,6 +224,15 @@ async function validateNode(state: AgentState) {
       if (!event.date) {
         errors.push("Falta la fecha del evento.");
         isValid = false;
+      } else {
+        // Validar si el evento ya ocurrió
+        const eventDate = new Date(event.date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (eventDate < today) {
+          errors.push("El evento ya ha ocurrido.");
+          isValid = false;
+        }
       }
     }
   } else {

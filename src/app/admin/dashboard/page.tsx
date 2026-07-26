@@ -45,13 +45,20 @@ export default function AdminDashboard() {
   const [events, setEvents] = useState<Event[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [resourceType, setResourceType] = useState<"promotions" | "events">("promotions");
+  const [resourceType, setResourceType] = useState<"promotions" | "events" | "instagram">("promotions");
   const [activeTab, setActiveTab] = useState<"active" | "pending" | "create" | "categories">("active");
   const [detailPromo, setDetailPromo] = useState<Promotion | null>(null);
   const [detailEvent, setDetailEvent] = useState<Event | null>(null);
   const [editingPromo, setEditingPromo] = useState<Promotion | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const router = useRouter();
+
+  // Instagram automation states
+  const [monitoredAccounts, setMonitoredAccounts] = useState<{ id: string; username: string; storeName: string; createdAt: string }[]>([]);
+  const [newInstagramUser, setNewInstagramUser] = useState("");
+  const [newInstagramStore, setNewInstagramStore] = useState("");
+  const [agentLogs, setAgentLogs] = useState<{ id: string; jobName: string; postsScraped: number; promosAdded: number; eventsAdded: number; promptTokens: number; completionTokens: number; estimatedCost: number; status: string; error?: string | null; createdAt: string }[]>([]);
+  const [syncingInstagram, setSyncingInstagram] = useState(false);
 
   // Create form states (Promotions)
   const [storeName, setStoreName] = useState("");
@@ -77,6 +84,25 @@ export default function AdminDashboard() {
   // Category form
   const [newCatName, setNewCatName] = useState("");
 
+  const fetchInstagramData = async () => {
+    try {
+      const [accountsRes, logsRes] = await Promise.all([
+        fetch("/api/admin/instagram"),
+        fetch("/api/admin/instagram?logs=true"),
+      ]);
+      if (accountsRes.ok) {
+        const accounts = await accountsRes.json();
+        setMonitoredAccounts(accounts);
+      }
+      if (logsRes.ok) {
+        const logs = await logsRes.json();
+        setAgentLogs(logs);
+      }
+    } catch (e) {
+      console.error("Error al cargar datos de automatización:", e);
+    }
+  };
+
   const fetchData = async () => {
     const [promoRes, catRes, eventRes] = await Promise.all([
       fetch("/api/admin/promotions"),
@@ -90,6 +116,7 @@ export default function AdminDashboard() {
     setPromotions(promos);
     setCategories(cats);
     setEvents(evts);
+    await fetchInstagramData();
     setLoading(false);
   };
 
@@ -197,6 +224,62 @@ export default function AdminDashboard() {
     });
     fetchData();
   };
+
+  const handleAddInstagram = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newInstagramUser.trim() || !newInstagramStore.trim()) return;
+
+    const res = await fetch("/api/admin/instagram", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: newInstagramUser.trim(),
+        storeName: newInstagramStore.trim(),
+      }),
+    });
+
+    if (res.ok) {
+      setNewInstagramUser("");
+      setNewInstagramStore("");
+      await fetchInstagramData();
+    } else {
+      const data = await res.json();
+      alert(data.error || "Error al agregar cuenta");
+    }
+  };
+
+  const handleDeleteInstagram = async (id: string) => {
+    if (!confirm("¿Dejar de monitorear esta cuenta de Instagram?")) return;
+    const res = await fetch(`/api/admin/instagram?id=${id}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      await fetchInstagramData();
+    } else {
+      alert("Error al eliminar cuenta");
+    }
+  };
+
+  const handleSyncInstagram = async () => {
+    setSyncingInstagram(true);
+    try {
+      const res = await fetch("/api/cron/sync-instagram");
+      if (res.ok) {
+        const data = await res.json();
+        alert(`¡Sincronización terminada!\nPosts scrapeados: ${data.postsScraped}\nPromos creadas: ${data.promosAdded}\nEventos creados: ${data.eventsAdded}\nCosto estimado: $${data.estimatedCostUSD.toFixed(5)} USD`);
+        await fetchData();
+      } else {
+        const data = await res.json();
+        alert(`Error al sincronizar: ${data.details || "Verificar consola de logs del servidor"}`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error de red o servidor al sincronizar.");
+    } finally {
+      setSyncingInstagram(false);
+    }
+  };
+
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -314,49 +397,61 @@ export default function AdminDashboard() {
         >
           🎟️ Eventos
         </button>
+        <button
+          onClick={() => { setResourceType("instagram"); }}
+          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+            resourceType === "instagram"
+              ? "bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white shadow-md border border-neutral-200/50 dark:border-neutral-800"
+              : "text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
+          }`}
+        >
+          🤖 Automatización
+        </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
-        {resourceType === "promotions" ? (
-          <>
-            <button className={tabClass("active")} onClick={() => setActiveTab("active")}>
-              Publicadas ({activePromos.length})
-            </button>
-            <button className={tabClass("pending")} onClick={() => setActiveTab("pending")}>
-              Pendientes
-              {pendingPromos.length > 0 && (
-                <span className="ml-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
-                  {pendingPromos.length}
-                </span>
-              )}
-            </button>
-            <button className={tabClass("create")} onClick={() => setActiveTab("create")}>
-              + Nueva Promo
-            </button>
-            <button className={tabClass("categories")} onClick={() => setActiveTab("categories")}>
-              Categorías ({categories.length})
-            </button>
-          </>
-        ) : (
-          <>
-            <button className={tabClass("active")} onClick={() => setActiveTab("active")}>
-              Publicados ({activeEvents.length})
-            </button>
-            <button className={tabClass("pending")} onClick={() => setActiveTab("pending")}>
-              Pendientes
-              {pendingEvents.length > 0 && (
-                <span className="ml-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
-                  {pendingEvents.length}
-                </span>
-              )}
-            </button>
-            <button className={tabClass("create")} onClick={() => setActiveTab("create")}>
-              + Nuevo Evento
-            </button>
-          </>
-        )}
-      </div>
+      {resourceType !== "instagram" && (
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
+          {resourceType === "promotions" ? (
+            <>
+              <button className={tabClass("active")} onClick={() => setActiveTab("active")}>
+                Publicadas ({activePromos.length})
+              </button>
+              <button className={tabClass("pending")} onClick={() => setActiveTab("pending")}>
+                Pendientes
+                {pendingPromos.length > 0 && (
+                  <span className="ml-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                    {pendingPromos.length}
+                  </span>
+                )}
+              </button>
+              <button className={tabClass("create")} onClick={() => setActiveTab("create")}>
+                + Nueva Promo
+              </button>
+              <button className={tabClass("categories")} onClick={() => setActiveTab("categories")}>
+                Categorías ({categories.length})
+              </button>
+            </>
+          ) : (
+            <>
+              <button className={tabClass("active")} onClick={() => setActiveTab("active")}>
+                Publicados ({activeEvents.length})
+              </button>
+              <button className={tabClass("pending")} onClick={() => setActiveTab("pending")}>
+                Pendientes
+                {pendingEvents.length > 0 && (
+                  <span className="ml-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                    {pendingEvents.length}
+                  </span>
+                )}
+              </button>
+              <button className={tabClass("create")} onClick={() => setActiveTab("create")}>
+                + Nuevo Evento
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* PUBLISHED PROMOTIONS TAB */}
       {activeTab === "active" && resourceType === "promotions" && (
@@ -530,6 +625,185 @@ export default function AdminDashboard() {
               Crear y Publicar
             </button>
           </form>
+        </div>
+      )}
+
+      {/* AUTOMATION (INSTAGRAM) TAB */}
+      {resourceType === "instagram" && (
+        <div className="space-y-8">
+          {/* Top Panel: Action and Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            {/* Monitor Setup */}
+            <div className="bg-white dark:bg-neutral-800 p-6 rounded-2xl border border-neutral-200 dark:border-neutral-700 shadow-sm md:col-span-2">
+              <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+                📢 Monitorear Cuentas de Instagram
+              </h2>
+              <form onSubmit={handleAddInstagram} className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+                <div>
+                  <label className="text-xs text-neutral-500 block mb-1">Nombre de Usuario (@usuario)</label>
+                  <input
+                    type="text"
+                    placeholder="ej: gomez_burger"
+                    value={newInstagramUser}
+                    onChange={(e) => setNewInstagramUser(e.target.value)}
+                    required
+                    className="w-full p-3 border rounded-xl bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-neutral-500 block mb-1">Comercio Asociado</label>
+                  <input
+                    type="text"
+                    placeholder="ej: Gomez Burger"
+                    value={newInstagramStore}
+                    onChange={(e) => setNewInstagramStore(e.target.value)}
+                    required
+                    className="w-full p-3 border rounded-xl bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div className="sm:col-span-2 mt-2">
+                  <button
+                    type="submit"
+                    className="w-full bg-primary text-white py-3 rounded-xl font-bold hover:bg-red-700 transition-colors"
+                  >
+                    + Agregar Cuenta a Sincronizar
+                  </button>
+                </div>
+              </form>
+
+              {/* Monitored List */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-neutral-500">Cuentas Monitoreadas ({monitoredAccounts.length})</h3>
+                {monitoredAccounts.length === 0 ? (
+                  <p className="text-neutral-400 text-xs py-4">No hay cuentas configuradas aún.</p>
+                ) : (
+                  <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                    {monitoredAccounts.map((acc) => (
+                      <div
+                        key={acc.id}
+                        className="flex items-center justify-between bg-neutral-50 dark:bg-neutral-900 px-4 py-3 rounded-xl border border-neutral-200/50 dark:border-neutral-800"
+                      >
+                        <div>
+                          <span className="font-bold text-sm text-primary">@{acc.username}</span>
+                          <span className="text-xs text-neutral-500 ml-2">({acc.storeName})</span>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteInstagram(acc.id)}
+                          className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950 p-1.5 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Sync trigger & general metrics */}
+            <div className="bg-white dark:bg-neutral-800 p-6 rounded-2xl border border-neutral-200 dark:border-neutral-700 shadow-sm space-y-6">
+              <h2 className="text-lg font-bold">🤖 Ejecución Manual</h2>
+              <p className="text-xs text-neutral-400">
+                La sincronización automática corre periódicamente (vía Cron). Si agregaste nuevas cuentas o quieres forzar el scraping de inmediato, usa el siguiente botón.
+              </p>
+              
+              <button
+                onClick={handleSyncInstagram}
+                disabled={syncingInstagram}
+                className="w-full flex items-center justify-center gap-2 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 py-4 rounded-xl font-bold hover:opacity-90 disabled:opacity-50 transition-all shadow-md cursor-pointer"
+              >
+                {syncingInstagram ? "Sincronizando..." : "🔄 Sincronizar Ahora"}
+              </button>
+
+              {/* Cost calculation display */}
+              <div className="border-t pt-4 border-neutral-200 dark:border-neutral-700 space-y-3">
+                <h3 className="text-sm font-bold">Consumo del Agente (Gemini AI)</h3>
+                
+                {(() => {
+                  const totalCost = agentLogs.reduce((acc, log) => acc + log.estimatedCost, 0);
+                  const totalPromptTokens = agentLogs.reduce((acc, log) => acc + log.promptTokens, 0);
+                  const totalCompletionTokens = agentLogs.reduce((acc, log) => acc + log.completionTokens, 0);
+                  return (
+                    <div className="space-y-2 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-neutral-400">Costo acumulado (15 runs):</span>
+                        <span className="font-bold text-emerald-500">${totalCost.toFixed(5)} USD</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-neutral-400">Tokens de entrada:</span>
+                        <span className="font-bold">{totalPromptTokens.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-neutral-400">Tokens de salida:</span>
+                        <span className="font-bold">{totalCompletionTokens.toLocaleString()}</span>
+                      </div>
+                      <div className="bg-yellow-100 dark:bg-yellow-950/30 p-3 rounded-xl border border-yellow-200 dark:border-yellow-900/50 mt-2 text-yellow-800 dark:text-yellow-200">
+                        <p className="font-medium">⚠️ Nota de Aprobación Humana</p>
+                        <p className="mt-1 text-[10px] leading-relaxed">
+                          Las publicaciones incompletas o erróneas se guardan como borradores con estado <strong>pendientes</strong>. Podrás verlas en las pestañas correspondientes de <em>Promociones / Eventos</em> para corregirlas y aprobarlas.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+          </div>
+
+          {/* Bottom Panel: Logs History */}
+          <div className="bg-white dark:bg-neutral-800 p-6 rounded-2xl border border-neutral-200 dark:border-neutral-700 shadow-sm">
+            <h2 className="text-lg font-bold mb-4">Historial de Ejecuciones (Logs)</h2>
+            {agentLogs.length === 0 ? (
+              <p className="text-neutral-400 text-center py-10">No hay registros de ejecución disponibles.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-neutral-200 dark:border-neutral-700 text-neutral-400 font-medium">
+                      <th className="py-2">Fecha / Hora</th>
+                      <th className="py-2">Scrapeados</th>
+                      <th className="py-2">Promos Creadas</th>
+                      <th className="py-2">Eventos Creados</th>
+                      <th className="py-2">Costo (USD)</th>
+                      <th className="py-2">Estado</th>
+                      <th className="py-2">Detalles / Error</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {agentLogs.map((log) => (
+                      <tr key={log.id} className="border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50/50 dark:hover:bg-neutral-900/50">
+                        <td className="py-3 font-mono">
+                          {new Date(log.createdAt).toLocaleString("es-AR", {
+                            timeZone: "America/Argentina/Buenos_Aires",
+                          })}
+                        </td>
+                        <td className="py-3">{log.postsScraped}</td>
+                        <td className="py-3 text-primary font-semibold">{log.promosAdded}</td>
+                        <td className="py-3 text-blue-500 font-semibold">{log.eventsAdded}</td>
+                        <td className="py-3 font-semibold text-emerald-500">${log.estimatedCost.toFixed(5)}</td>
+                        <td className="py-3">
+                          <span
+                            className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                              log.status === "SUCCESS"
+                                ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200"
+                                : "bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-200"
+                            }`}
+                          >
+                            {log.status}
+                          </span>
+                        </td>
+                        <td className="py-3 max-w-[200px] truncate text-neutral-400" title={log.error || ""}>
+                          {log.error || "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

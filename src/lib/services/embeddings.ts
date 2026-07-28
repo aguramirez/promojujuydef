@@ -1,12 +1,10 @@
-import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
 import { randomUUID } from "crypto";
 
-// Initialize Gemini Embeddings service using text-embedding-004
-const embeddings = new GoogleGenerativeAIEmbeddings({
-  apiKey: process.env.GOOGLE_API_KEY || "",
-  modelName: "text-embedding-004",
-});
+// Initialize Gemini Embeddings service using native SDK to support dimensionality configuration
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
+const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-2" });
 
 /**
  * Generates vector embeddings for a given string of text.
@@ -14,8 +12,11 @@ const embeddings = new GoogleGenerativeAIEmbeddings({
  */
 export async function getEmbedding(text: string): Promise<number[]> {
   try {
-    const res = await embeddings.embedQuery(text);
-    return res;
+    const res = await embeddingModel.embedContent({
+      content: { role: "user", parts: [{ text }] },
+      outputDimensionality: 768,
+    } as any);
+    return res.embedding.values;
   } catch (error) {
     console.error("Error generating embedding from Gemini:", error);
     throw error;

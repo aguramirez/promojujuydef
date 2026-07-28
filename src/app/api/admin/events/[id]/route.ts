@@ -21,6 +21,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     description, 
     date, 
     ctaUrl, 
+    instagramPostUrl,
     mapsUrl, 
     published 
   } = body;
@@ -34,6 +35,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         ...(description && { description }),
         ...(date && { date: new Date(date.substring(0, 10) + "T12:00:00") }),
         ...(ctaUrl !== undefined && { ctaUrl }),
+        ...(instagramPostUrl !== undefined && { instagramPostUrl }),
         ...(mapsUrl !== undefined && { mapsUrl }),
         ...(published !== undefined && { published }),
       },

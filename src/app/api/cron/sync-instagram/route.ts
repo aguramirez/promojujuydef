@@ -112,7 +112,8 @@ export async function GET(request: Request) {
               imageUrl: post.imageUrl,
               startDate: new Date(promoData.startDate || post.timestamp),
               endDate: new Date(promoData.endDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
-              ctaUrl: post.postUrl,
+              ctaUrl: promoData.ctaUrl || post.postUrl,
+              instagramPostUrl: post.postUrl,
               categoryId,
               dias: promoData.dias || [],
               published,
@@ -153,6 +154,7 @@ export async function GET(request: Request) {
               imageUrl: post.imageUrl,
               date: new Date(eventData.date || post.timestamp),
               ctaUrl: eventData.ctaUrl || post.postUrl,
+              instagramPostUrl: post.postUrl,
               published,
             },
           });

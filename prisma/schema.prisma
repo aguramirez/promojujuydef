@@ -13,36 +13,38 @@ model Category {
 }
 
 model Promotion {
-  id          String          @id @default(uuid())
-  storeName   String
-  imageUrl    String
-  description String
-  startDate   DateTime
-  endDate     DateTime
-  ctaUrl      String
-  status      PromotionStatus @default(NORMAL)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  categoryId  String?
-  mapsUrl     String?
-  published   Boolean         @default(false)
-  title       String?
-  dias        String[]        @default([])
-  category    Category?       @relation(fields: [categoryId], references: [id])
+  id               String          @id @default(uuid())
+  storeName        String
+  imageUrl         String
+  description      String
+  startDate        DateTime
+  endDate          DateTime
+  ctaUrl           String
+  instagramPostUrl String?
+  status           PromotionStatus @default(NORMAL)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  categoryId       String?
+  mapsUrl          String?
+  published        Boolean         @default(false)
+  title            String?
+  dias             String[]        @default([])
+  category         Category?       @relation(fields: [categoryId], references: [id])
 
   @@index([startDate, endDate])
 }
 
 model Event {
-  id          String          @id @default(uuid())
-  storeName   String
-  title       String?
-  imageUrl    String
-  description String
-  date        DateTime
-  ctaUrl      String
-  mapsUrl     String?
-  status      PromotionStatus @default(NORMAL)
+  id               String          @id @default(uuid())
+  storeName        String
+  title            String?
+  imageUrl         String
+  description      String
+  date             DateTime
+  ctaUrl           String
+  instagramPostUrl String?
+  mapsUrl          String?
+  status           PromotionStatus @default(NORMAL)
   published   Boolean         @default(false)
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt

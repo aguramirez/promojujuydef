@@ -19,6 +19,7 @@ interface Promotion {
   startDate: string;
   endDate: string;
   ctaUrl: string;
+  instagramPostUrl?: string | null;
   mapsUrl?: string | null;
   status: string;
   published: boolean;
@@ -35,6 +36,7 @@ interface Event {
   description: string;
   date: string;
   ctaUrl: string;
+  instagramPostUrl?: string | null;
   mapsUrl?: string | null;
   published: boolean;
   createdAt: string;
@@ -1078,6 +1080,11 @@ function PromoCard({
               <MapPin className="w-2.5 h-2.5" /> Maps
             </a>
           )}
+          {promo.instagramPostUrl && (
+            <a href={promo.instagramPostUrl} target="_blank" rel="noreferrer" className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-pink-50 text-pink-600 dark:bg-pink-950/20 dark:text-pink-400 flex items-center gap-1">
+              <ExternalLink className="w-2.5 h-2.5" /> Instagram
+            </a>
+          )}
         </div>
         {isPending && (
           <p className="text-[10px] text-yellow-600 dark:text-yellow-400 mt-1 font-semibold">
@@ -1166,6 +1173,11 @@ function EventCard({
           {event.mapsUrl && (
             <a href={event.mapsUrl} target="_blank" rel="noreferrer" className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-600 flex items-center gap-1">
               <MapPin className="w-2.5 h-2.5" /> Maps
+            </a>
+          )}
+          {event.instagramPostUrl && (
+            <a href={event.instagramPostUrl} target="_blank" rel="noreferrer" className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-pink-50 text-pink-600 dark:bg-pink-950/20 dark:text-pink-400 flex items-center gap-1">
+              <ExternalLink className="w-2.5 h-2.5" /> Instagram
             </a>
           )}
         </div>

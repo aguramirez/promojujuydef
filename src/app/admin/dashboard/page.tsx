@@ -20,6 +20,7 @@ interface Promotion {
   endDate: string;
   ctaUrl: string;
   instagramPostUrl?: string | null;
+  dias?: string[];
   mapsUrl?: string | null;
   status: string;
   published: boolean;
@@ -920,6 +921,54 @@ export default function AdminDashboard() {
                       {s === "ESTRELLA" ? "⭐ Estrella" : s === "IMPORTANTE" ? "🔥 Importante" : s === "ULTIMO" ? "⏰ Último" : "Normal"}
                     </button>
                   ))}
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-xs font-bold text-neutral-500 mb-1.5 block">Días de la Semana Válidos</label>
+                <div className="flex flex-wrap gap-2">
+                  {["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"].map(day => {
+                    const isSelected = (editingPromo.dias || [])
+                      .map((d: string) => d.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""))
+                      .includes(day);
+                    
+                    return (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => {
+                          const currentDias = editingPromo.dias || [];
+                          const cleanDay = (d: string) => d.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                          const existingIndex = currentDias.findIndex((d: string) => cleanDay(d) === day);
+                          
+                          let newDias = [...currentDias];
+                          if (existingIndex > -1) {
+                            newDias.splice(existingIndex, 1);
+                          } else {
+                            // Map to standard Spanish capitalized day names with proper accents
+                            const standardDayNameMap: Record<string, string> = {
+                              lunes: "Lunes",
+                              martes: "Martes",
+                              miercoles: "Miércoles",
+                              jueves: "Jueves",
+                              viernes: "Viernes",
+                              sabado: "Sábado",
+                              domingo: "Domingo"
+                            };
+                            newDias.push(standardDayNameMap[day]);
+                          }
+                          setEditingPromo({ ...editingPromo, dias: newDias });
+                        }}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all ${
+                          isSelected 
+                            ? "bg-primary text-white border-primary" 
+                            : "bg-transparent text-neutral-500 border-neutral-200 dark:border-neutral-700 hover:border-primary/50"
+                        }`}
+                      >
+                        {day === "miercoles" ? "Miércoles" : day === "sabado" ? "Sábado" : day.charAt(0).toUpperCase() + day.slice(1)}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

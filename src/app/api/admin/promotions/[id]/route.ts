@@ -26,7 +26,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     mapsUrl, 
     status, 
     published, 
-    categoryId 
+    categoryId,
+    dias
   } = body;
 
   try {
@@ -44,6 +45,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         ...(status && { status }),
         ...(published !== undefined && { published }),
         ...(categoryId !== undefined && { categoryId }),
+        ...(dias !== undefined && { dias }),
       },
       include: { category: true }
     });

@@ -11,6 +11,7 @@ export interface InstagramPost {
   imageUrl: string;
   timestamp: string;
   postUrl: string;
+  profilePicUrl?: string;
 }
 
 /**
@@ -60,6 +61,7 @@ export async function fetchLatestInstagramPosts(
       const timestamp = item.timestamp || item.takenAt || new Date().toISOString();
       const postUrl = item.url || (item.shortcode ? `https://www.instagram.com/p/${item.shortcode}/` : "");
       const id = item.id || item.shortcode || Math.random().toString(36).substring(7);
+      const profilePicUrl = item.ownerProfilePicUrl || (item.owner && item.owner.profile_pic_url) || "";
 
       return {
         id,
@@ -67,6 +69,7 @@ export async function fetchLatestInstagramPosts(
         imageUrl,
         timestamp,
         postUrl,
+        profilePicUrl,
       };
     });
   } catch (error) {

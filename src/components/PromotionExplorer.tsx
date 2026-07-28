@@ -77,7 +77,12 @@ export default function PromotionExplorer({ allPromotions }: { allPromotions: Pr
         if (selectedCategory && p.category?.id !== selectedCategory) return false;
 
         // Day of week filter
-        if (p.dias && p.dias.length > 0 && !p.dias.includes(selectedDayName)) return false;
+        if (p.dias && p.dias.length > 0) {
+          const cleanDay = (day: string) => day.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const cleanSelectedDay = cleanDay(selectedDayName);
+          const cleanPromoDays = p.dias.map(d => cleanDay(d));
+          if (!cleanPromoDays.includes(cleanSelectedDay)) return false;
+        }
 
         // Date range: promo active during selected day
         const start = new Date(p.startDate).getTime();

@@ -44,11 +44,17 @@ export async function GET(request: Request) {
           continue;
         }
 
+        // Sleep de 3 segundos para respetar el límite de cuota (15 RPM del tier gratuito)
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+
+        // Usar la foto de perfil de Instagram como fallback si el post no tiene imagen (ej: reels o videos)
+        const finalImageUrl = post.imageUrl || post.profilePicUrl || "";
+
         // Initialize state for the LangGraph agents flow
         const inputState = {
           postId: post.id,
           captionText: post.caption,
-          imageUrl: post.imageUrl,
+          imageUrl: finalImageUrl,
           postUrl: post.postUrl,
           timestamp: post.timestamp,
           promptTokens: 0,
@@ -67,6 +73,15 @@ export async function GET(request: Request) {
         // Skip if classified as NONE (informative/not commercial/not event)
         if (resultState.itemType === "NONE") {
           console.log(`Post ${post.id} classified as NONE. Discarding.`);
+          continue;
+        }
+
+        // Descartar por completo (no guardar ni como borrador) si el evento ya ocurrió o la promo ya finalizó
+        const isExpired = (resultState.validationErrors || []).some(
+          (err: string) => err.includes("ya ha ocurrido") || err.includes("ya ha finalizado")
+        );
+        if (isExpired) {
+          console.log(`Post classified as ${resultState.itemType} but is already expired. Discarding completely.`);
           continue;
         }
 
@@ -109,7 +124,7 @@ export async function GET(request: Request) {
               storeName,
               title,
               description,
-              imageUrl: post.imageUrl,
+              imageUrl: finalImageUrl,
               startDate: new Date(promoData.startDate || post.timestamp),
               endDate: new Date(promoData.endDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
               ctaUrl: promoData.ctaUrl || post.postUrl,
@@ -151,7 +166,7 @@ export async function GET(request: Request) {
               storeName,
               title,
               description,
-              imageUrl: post.imageUrl,
+              imageUrl: finalImageUrl,
               date: new Date(eventData.date || post.timestamp),
               ctaUrl: eventData.ctaUrl || post.postUrl,
               instagramPostUrl: post.postUrl,

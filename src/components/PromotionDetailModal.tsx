@@ -97,26 +97,31 @@ export default function PromotionDetailModal({ promo, onClose, onCoupon }: Props
       {/* Modal panel */}
       <div className="relative z-10 bg-white dark:bg-neutral-900 w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden max-h-[92dvh] flex flex-col animate-slide-up">
         {/* Image */}
-        <div className="relative h-52 sm:h-64 w-full bg-neutral-200 dark:bg-neutral-800 shrink-0">
+        <div className="relative w-full bg-neutral-100 dark:bg-neutral-950 shrink-0 flex items-center justify-center overflow-hidden border-b border-neutral-100 dark:border-neutral-800">
           {promo.imageUrl ? (
-            <img
-              src={promo.imageUrl}
-              alt={promo.storeName}
-              loading="lazy"
-              className="w-full h-full object-cover"
-            />
+            <>
+              {/* Blurred background image for premium ambient effect */}
+              <div 
+                className="absolute inset-0 bg-cover bg-center blur-2xl opacity-40 scale-110 pointer-events-none"
+                style={{ backgroundImage: `url(${promo.imageUrl})` }}
+              />
+              <img
+                src={promo.imageUrl}
+                alt={promo.storeName}
+                loading="lazy"
+                className="relative z-10 w-full h-auto max-h-[50vh] sm:max-h-[60vh] object-contain"
+              />
+            </>
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-neutral-400 text-sm">
+            <div className="w-full h-52 sm:h-64 flex items-center justify-center text-neutral-400 text-sm">
               Sin imagen
             </div>
           )}
-          {/* Gradient overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
 
           {/* Status badge */}
           {STATUS_LABELS[promo.status] && (
             <span
-              className={`absolute top-4 left-4 text-xs font-bold px-3 py-1 rounded-full border ${
+              className={`absolute top-4 left-4 z-20 text-xs font-bold px-3 py-1 rounded-full border ${
                 STATUS_COLORS[promo.status] || STATUS_COLORS.NORMAL
               }`}
             >
@@ -127,7 +132,7 @@ export default function PromotionDetailModal({ promo, onClose, onCoupon }: Props
           {/* Close button */}
           <button
             onClick={handleClose}
-            className="absolute top-4 right-4 bg-white/20 backdrop-blur-sm hover:bg-white/40 text-white rounded-full p-2 transition-all"
+            className="absolute top-4 right-4 z-20 bg-white/20 backdrop-blur-sm hover:bg-white/40 text-white rounded-full p-2 transition-all"
             aria-label="Cerrar"
           >
             <X className="w-5 h-5" />

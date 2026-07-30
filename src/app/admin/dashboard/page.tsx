@@ -1310,13 +1310,24 @@ function EventDetailModal({
     <div className="fixed inset-0 z-[999] flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative z-10 bg-white dark:bg-neutral-900 w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden max-h-[92dvh] flex flex-col">
-        <div className="relative h-52 sm:h-64 w-full bg-neutral-200 dark:bg-neutral-800 shrink-0">
+        <div className="relative w-full bg-neutral-100 dark:bg-neutral-950 shrink-0 flex items-center justify-center overflow-hidden border-b border-neutral-100 dark:border-neutral-800">
           {event.imageUrl ? (
-            <img src={event.imageUrl} alt={event.storeName} className="w-full h-full object-cover" />
+            <>
+              {/* Blurred background image for premium ambient effect */}
+              <div 
+                className="absolute inset-0 bg-cover bg-center blur-2xl opacity-40 scale-110 pointer-events-none"
+                style={{ backgroundImage: `url(${event.imageUrl})` }}
+              />
+              <img
+                src={event.imageUrl}
+                alt={event.storeName}
+                className="relative z-10 w-full h-auto max-h-[50vh] sm:max-h-[60vh] object-contain"
+              />
+            </>
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-neutral-400 text-sm">Sin imagen</div>
+            <div className="w-full h-52 sm:h-64 flex items-center justify-center text-neutral-400 text-sm">Sin imagen</div>
           )}
-          <button onClick={onClose} className="absolute top-4 right-4 bg-white/20 backdrop-blur-sm hover:bg-white/40 text-white rounded-full p-2">
+          <button onClick={onClose} className="absolute top-4 right-4 z-20 bg-white/20 backdrop-blur-sm hover:bg-white/40 text-white rounded-full p-2">
             <X className="w-5 h-5" />
           </button>
         </div>

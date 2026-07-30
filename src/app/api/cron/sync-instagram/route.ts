@@ -4,6 +4,30 @@ import { fetchLatestInstagramPosts } from "@/lib/services/apify";
 import { checkDuplicateAndSaveEmbedding } from "@/lib/services/embeddings";
 import { appGraph } from "@/lib/agents/workflow";
 import { randomUUID } from "crypto";
+import sharp from "sharp";
+
+async function downloadAndCompressImage(url: string): Promise<string> {
+  if (!url) return "";
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn(`Failed to fetch image directly from ${url} (status: ${res.status})`);
+      return "";
+    }
+    const arrayBuffer = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    
+    const compressedBuffer = await sharp(buffer)
+      .resize({ width: 800, height: 800, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 75 })
+      .toBuffer();
+      
+    return `data:image/webp;base64,${compressedBuffer.toString("base64")}`;
+  } catch (error) {
+    console.error("Error downloading or compressing image from URL:", url, error);
+    return "";
+  }
+}
 
 export async function GET(request: Request) {
   console.log("Starting Instagram synchronization cron job...");
@@ -49,6 +73,14 @@ export async function GET(request: Request) {
 
         // Usar la foto de perfil de Instagram como fallback si el post no tiene imagen (ej: reels o videos)
         const finalImageUrl = post.imageUrl || post.profilePicUrl || "";
+
+        let storedImageUrl = finalImageUrl;
+        if (finalImageUrl) {
+          const base64Image = await downloadAndCompressImage(finalImageUrl);
+          if (base64Image) {
+            storedImageUrl = base64Image;
+          }
+        }
 
         // Initialize state for the LangGraph agents flow
         const inputState = {
@@ -124,7 +156,7 @@ export async function GET(request: Request) {
               storeName,
               title,
               description,
-              imageUrl: finalImageUrl,
+              imageUrl: storedImageUrl,
               startDate: new Date(promoData.startDate || post.timestamp),
               endDate: new Date(promoData.endDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
               ctaUrl: promoData.ctaUrl || post.postUrl,
@@ -166,7 +198,7 @@ export async function GET(request: Request) {
               storeName,
               title,
               description,
-              imageUrl: finalImageUrl,
+              imageUrl: storedImageUrl,
               date: new Date(eventData.date || post.timestamp),
               ctaUrl: eventData.ctaUrl || post.postUrl,
               instagramPostUrl: post.postUrl,

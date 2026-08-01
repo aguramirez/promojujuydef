@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle, XCircle, Trash2, Eye, Tag, MapPin, Plus, X, Edit, ExternalLink, Calendar } from "lucide-react";
 import PromotionDetailModal from "@/components/PromotionDetailModal";
@@ -63,6 +63,16 @@ export default function AdminDashboard() {
   const [newInstagramStore, setNewInstagramStore] = useState("");
   const [agentLogs, setAgentLogs] = useState<{ id: string; jobName: string; postsScraped: number; promosAdded: number; eventsAdded: number; promptTokens: number; completionTokens: number; estimatedCost: number; status: string; error?: string | null; createdAt: string }[]>([]);
   const [syncingInstagram, setSyncingInstagram] = useState(false);
+  const [syncLogs, setSyncLogs] = useState<string[]>([]);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const logEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll logs terminal
+  useEffect(() => {
+    if (logEndRef.current) {
+      logEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [syncLogs]);
 
   // Create form states (Promotions)
   const [storeName, setStoreName] = useState("");
@@ -266,19 +276,61 @@ export default function AdminDashboard() {
 
   const handleSyncInstagram = async () => {
     setSyncingInstagram(true);
+    setSyncLogs(["Iniciando conexión con el servidor de agentes..."]);
+    setShowSyncModal(true);
     try {
-      const res = await fetch("/api/cron/sync-instagram");
-      if (res.ok) {
-        const data = await res.json();
-        alert(`¡Sincronización terminada!\nPosts scrapeados: ${data.postsScraped}\nPromos creadas: ${data.promosAdded}\nEventos creados: ${data.eventsAdded}\nCosto estimado: $${data.estimatedCostUSD.toFixed(5)} USD`);
-        await fetchData();
-      } else {
-        const data = await res.json();
-        alert(`Error al sincronizar: ${data.details || "Verificar consola de logs del servidor"}`);
+      const res = await fetch("/api/cron/sync-instagram?stream=true");
+      if (!res.ok) {
+        throw new Error(`Error del Servidor HTTP ${res.status}`);
       }
-    } catch (e) {
+
+      const reader = res.body?.getReader();
+      if (!reader) {
+        throw new Error("No se pudo obtener el lector de flujo.");
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.trim()) {
+            try {
+              const data = JSON.parse(line);
+              if (data.type === "log") {
+                const prefix = data.level === "error" ? "❌ " : data.level === "warn" ? "⚠️ " : "💬 ";
+                setSyncLogs((prev) => [...prev, `${prefix}${data.message}`]);
+              } else if (data.type === "success") {
+                const stats = data.data;
+                setSyncLogs((prev) => [
+                  ...prev,
+                  "✅ Sincronización completada con éxito.",
+                  `📊 Resumen del Proceso:`,
+                  `   - Posts Analizados: ${stats.postsScraped}`,
+                  `   - Promociones Creadas: ${stats.promosAdded}`,
+                  `   - Eventos Creados: ${stats.eventsAdded}`,
+                  `   - Costo Estimado Gemini: $${(stats.estimatedCostUSD || 0).toFixed(5)} USD`
+                ]);
+                await fetchData();
+              } else if (data.type === "error") {
+                setSyncLogs((prev) => [...prev, `❌ Error: ${data.error} (${data.details || ""})`]);
+              }
+            } catch (err) {
+              setSyncLogs((prev) => [...prev, line]);
+            }
+          }
+        }
+      }
+    } catch (e: any) {
       console.error(e);
-      alert("Error de red o servidor al sincronizar.");
+      setSyncLogs((prev) => [...prev, `❌ Error de red o servidor: ${e.message || String(e)}`]);
     } finally {
       setSyncingInstagram(false);
     }
@@ -816,6 +868,56 @@ export default function AdminDashboard() {
 
       {/* EVENT DETAIL MODAL */}
       <EventDetailModal event={detailEvent} onClose={() => setDetailEvent(null)} />
+
+      {/* REAL-TIME SYNC LOGS TERMINAL MODAL */}
+      {showSyncModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => !syncingInstagram && setShowSyncModal(false)} />
+          <div className="relative z-10 bg-neutral-900 border border-neutral-800 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            {/* Terminal Header */}
+            <div className="px-6 py-4 bg-neutral-950 border-b border-neutral-800 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <span className="w-3.5 h-3.5 rounded-full bg-red-500 block"></span>
+                <span className="w-3.5 h-3.5 rounded-full bg-yellow-500 block"></span>
+                <span className="w-3.5 h-3.5 rounded-full bg-green-500 block"></span>
+                <span className="text-neutral-400 font-mono text-xs ml-2 select-none">terminal://agent-sync</span>
+              </div>
+              <span className="text-neutral-400 font-bold text-sm">Consola del Agente</span>
+            </div>
+            
+            {/* Terminal Body */}
+            <div className="p-6 bg-neutral-950/90 font-mono text-xs sm:text-sm text-green-400 overflow-y-auto max-h-[60vh] min-h-[300px] flex flex-col gap-2 scrollbar-thin scrollbar-thumb-neutral-800 scrollbar-track-transparent">
+              {syncLogs.map((log, index) => (
+                <div key={index} className="whitespace-pre-wrap leading-relaxed">
+                  {log}
+                </div>
+              ))}
+              
+              {syncingInstagram && (
+                <div className="flex items-center gap-1 text-green-500 font-bold mt-1">
+                  <span className="animate-pulse">⚡ Ejecutando agentes...</span>
+                  <span className="animate-ping">_</span>
+                </div>
+              )}
+              <div ref={logEndRef} />
+            </div>
+
+            {/* Terminal Footer */}
+            <div className="px-6 py-4 bg-neutral-950 border-t border-neutral-800 flex justify-between items-center">
+              <span className="text-neutral-500 text-xs font-mono">
+                {syncingInstagram ? "⚠️ No cierres esta ventana hasta terminar" : "✅ Proceso finalizado"}
+              </span>
+              <button 
+                onClick={() => setShowSyncModal(false)} 
+                disabled={syncingInstagram}
+                className={`px-5 py-2.5 rounded-xl font-bold text-xs transition-all ${syncingInstagram ? "bg-neutral-800 text-neutral-600 cursor-not-allowed" : "bg-green-500 hover:bg-green-600 text-neutral-950 font-semibold"}`}
+              >
+                Cerrar Terminal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* EDIT/APPROVE MODAL */}
       {editingPromo && (

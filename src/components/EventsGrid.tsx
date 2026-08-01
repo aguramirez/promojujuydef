@@ -14,6 +14,7 @@ type Event = {
   ctaUrl: string;
   mapsUrl?: string | null;
   status: string;
+  instagramPostUrl?: string | null;
 };
 
 export default function EventsGrid({ events }: { events: Event[] }) {

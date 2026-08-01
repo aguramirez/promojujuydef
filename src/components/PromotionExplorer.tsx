@@ -22,6 +22,7 @@ interface Promotion {
   status: string;
   category?: Category | null;
   dias?: string[];
+  instagramPostUrl?: string | null;
 }
 
 const TZ = "America/Argentina/Buenos_Aires";

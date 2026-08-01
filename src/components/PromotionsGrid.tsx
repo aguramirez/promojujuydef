@@ -17,6 +17,7 @@ type Promotion = {
   mapsUrl?: string | null;
   status: string;
   category?: { id: string; name: string } | null;
+  instagramPostUrl?: string | null;
 };
 
 const STATUS_BADGE: Record<string, { label: string; cls: string } | null> = {

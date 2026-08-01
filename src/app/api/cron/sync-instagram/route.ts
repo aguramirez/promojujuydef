@@ -29,9 +29,59 @@ async function downloadAndCompressImage(url: string): Promise<string> {
   }
 }
 
-export async function GET(request: Request) {
-  console.log("Starting Instagram synchronization cron job...");
-  
+class StreamLogger {
+  private controller: ReadableStreamDefaultController<any> | null = null;
+  private encoder = new TextEncoder();
+
+  constructor(controller: ReadableStreamDefaultController<any> | null) {
+    this.controller = controller;
+  }
+
+  log(message: string, type: "info" | "error" | "warn" = "info") {
+    console.log(`[${type.toUpperCase()}] ${message}`);
+    if (this.controller) {
+      const payload = JSON.stringify({ type: "log", level: type, message, timestamp: new Date().toISOString() });
+      try {
+        this.controller.enqueue(this.encoder.encode(payload + "\n"));
+      } catch (e) {
+        console.error("Error writing log to stream:", e);
+      }
+    }
+  }
+
+  sendSuccess(data: any) {
+    if (this.controller) {
+      const payload = JSON.stringify({ type: "success", data });
+      try {
+        this.controller.enqueue(this.encoder.encode(payload + "\n"));
+      } catch (e) {
+        console.error("Error writing success to stream:", e);
+      }
+    }
+  }
+
+  sendError(error: string, details?: string) {
+    if (this.controller) {
+      const payload = JSON.stringify({ type: "error", error, details });
+      try {
+        this.controller.enqueue(this.encoder.encode(payload + "\n"));
+      } catch (e) {
+        console.error("Error writing error to stream:", e);
+      }
+    }
+  }
+}
+
+interface SyncStats {
+  postsScraped: number;
+  promosAdded: number;
+  eventsAdded: number;
+  promptTokens: number;
+  completionTokens: number;
+  estimatedCostUSD: number;
+}
+
+async function performSync(logger: StreamLogger): Promise<SyncStats> {
   let totalScraped = 0;
   let totalPromosAdded = 0;
   let totalEventsAdded = 0;
@@ -42,16 +92,27 @@ export async function GET(request: Request) {
     // 1. Fetch monitored Instagram accounts from DB
     const profiles = await prisma.monitoredInstagram.findMany();
     if (profiles.length === 0) {
-      console.log("No monitored Instagram profiles found in DB.");
-      return NextResponse.json({ message: "No profiles monitored" });
+      logger.log("No monitored Instagram profiles found in DB.", "warn");
+      return {
+        postsScraped: 0,
+        promosAdded: 0,
+        eventsAdded: 0,
+        promptTokens: 0,
+        completionTokens: 0,
+        estimatedCostUSD: 0
+      };
     }
+
+    logger.log(`Found ${profiles.length} profiles to synchronize.`);
 
     // 2. Loop through each monitored account
     for (const profile of profiles) {
-      console.log(`Processing Instagram profile @${profile.username} (Store: ${profile.storeName})...`);
+      logger.log(`Processing Instagram profile @${profile.username} (Store: ${profile.storeName})...`);
       
       // Fetch latest 3 posts from Apify
+      logger.log(`Starting Apify Instagram scraper for @${profile.username}...`);
       const posts = await fetchLatestInstagramPosts(profile.username, 3);
+      logger.log(`Successfully scraped ${posts.length} posts from @${profile.username}`);
       totalScraped += posts.length;
 
       for (const post of posts) {
@@ -64,11 +125,12 @@ export async function GET(request: Request) {
         });
 
         if (existingPromo || existingEvent) {
-          console.log(`Post URL ${post.postUrl} already processed in DB. Skipping.`);
+          logger.log(`Post URL ${post.postUrl} already processed in DB. Skipping.`, "info");
           continue;
         }
 
         // Sleep de 3 segundos para respetar el límite de cuota (15 RPM del tier gratuito)
+        logger.log("Waiting 3 seconds to avoid rate limits...");
         await new Promise((resolve) => setTimeout(resolve, 3000));
 
         // Usar la foto de perfil de Instagram como fallback si el post no tiene imagen (ej: reels o videos)
@@ -76,9 +138,11 @@ export async function GET(request: Request) {
 
         let storedImageUrl = finalImageUrl;
         if (finalImageUrl) {
+          logger.log(`Downloading and compressing image for post: ${post.postUrl}`);
           const base64Image = await downloadAndCompressImage(finalImageUrl);
           if (base64Image) {
             storedImageUrl = base64Image;
+            logger.log("Image successfully compressed to WebP");
           }
         }
 
@@ -95,7 +159,7 @@ export async function GET(request: Request) {
           isValid: false,
         };
 
-        console.log(`Invoking agent graph for post: ${post.postUrl}`);
+        logger.log(`Invoking AI agent graph for post: ${post.postUrl}`);
         const resultState: any = await appGraph.invoke(inputState as any);
 
         // Accumulate token usage
@@ -104,7 +168,7 @@ export async function GET(request: Request) {
 
         // Skip if classified as NONE (informative/not commercial/not event)
         if (resultState.itemType === "NONE") {
-          console.log(`Post ${post.id} classified as NONE. Discarding.`);
+          logger.log(`Post ${post.id} classified as NONE. Discarding.`, "info");
           continue;
         }
 
@@ -113,7 +177,7 @@ export async function GET(request: Request) {
           (err: string) => err.includes("ya ha ocurrido") || err.includes("ya ha finalizado")
         );
         if (isExpired) {
-          console.log(`Post classified as ${resultState.itemType} but is already expired. Discarding completely.`);
+          logger.log(`Post classified as ${resultState.itemType} but is already expired. Discarding completely.`, "warn");
           continue;
         }
 
@@ -130,6 +194,7 @@ export async function GET(request: Request) {
           const promoId = randomUUID();
 
           // RAG check for semantic duplicates (using pgvector)
+          logger.log(`Checking semantic duplicates for Promotion: '${title}'`);
           const isDuplicate = await checkDuplicateAndSaveEmbedding(
             promoId,
             textToEmbed,
@@ -137,7 +202,7 @@ export async function GET(request: Request) {
           );
 
           if (isDuplicate) {
-            console.log(`Promotion '${title}' is a semantic duplicate. Skipping insertion.`);
+            logger.log(`Promotion '${title}' is a semantic duplicate. Skipping insertion.`, "warn");
             continue;
           }
 
@@ -168,7 +233,7 @@ export async function GET(request: Request) {
           });
 
           totalPromosAdded++;
-          console.log(`Saved Promotion: '${title}' (Published: ${published})`);
+          logger.log(`Saved Promotion: '${title}' (Published: ${published})`, "info");
 
         // 4. Process Event
         } else if (resultState.itemType === "EVENT" && resultState.extractedEvent) {
@@ -181,6 +246,7 @@ export async function GET(request: Request) {
           const eventId = randomUUID();
 
           // RAG check for semantic duplicates (using pgvector)
+          logger.log(`Checking semantic duplicates for Event: '${title}'`);
           const isDuplicate = await checkDuplicateAndSaveEmbedding(
             eventId,
             textToEmbed,
@@ -188,7 +254,7 @@ export async function GET(request: Request) {
           );
 
           if (isDuplicate) {
-            console.log(`Event '${title}' is a semantic duplicate. Skipping insertion.`);
+            logger.log(`Event '${title}' is a semantic duplicate. Skipping insertion.`, "warn");
             continue;
           }
 
@@ -207,14 +273,12 @@ export async function GET(request: Request) {
           });
 
           totalEventsAdded++;
-          console.log(`Saved Event: '${title}' (Published: ${published})`);
+          logger.log(`Saved Event: '${title}' (Published: ${published})`, "info");
         }
       }
     }
 
-    // Cost estimation for Gemini 1.5 Flash
-    // Input: $0.075 / 1M tokens ($0.000000075 / token)
-    // Output: $0.30 / 1M tokens ($0.00000030 / token)
+    // Cost estimation for Gemini
     const estimatedCost = (totalPromptTokens * 0.000000075) + (totalCompletionTokens * 0.00000030);
 
     // Write execution log in Database
@@ -231,18 +295,18 @@ export async function GET(request: Request) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
+    logger.log("Synchronization process completed successfully.");
+    return {
       postsScraped: totalScraped,
       promosAdded: totalPromosAdded,
       eventsAdded: totalEventsAdded,
       promptTokens: totalPromptTokens,
       completionTokens: totalCompletionTokens,
       estimatedCostUSD: estimatedCost,
-    });
+    };
 
   } catch (error: any) {
-    console.error("Critical error inside sync cron job:", error);
+    logger.log(`Critical error inside sync cron job: ${error.message || String(error)}`, "error");
     
     // Log failure to AgentLog
     await prisma.agentLog.create({
@@ -259,9 +323,51 @@ export async function GET(request: Request) {
       },
     });
 
-    return NextResponse.json(
-      { error: "Sincronización fallida", details: error.message },
-      { status: 500 }
-    );
+    throw error;
+  }
+}
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const streamMode = searchParams.get("stream") === "true";
+
+  if (streamMode) {
+    const stream = new ReadableStream({
+      async start(controller) {
+        const logger = new StreamLogger(controller);
+        logger.log("Starting Instagram synchronization cron job in stream mode...");
+        try {
+          const stats = await performSync(logger);
+          logger.sendSuccess(stats);
+        } catch (error: any) {
+          logger.sendError("Sincronización fallida", error.message || String(error));
+        } finally {
+          controller.close();
+        }
+      }
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+      },
+    });
+  } else {
+    const logger = new StreamLogger(null);
+    logger.log("Starting Instagram synchronization cron job in background mode...");
+    try {
+      const stats = await performSync(logger);
+      return NextResponse.json({
+        success: true,
+        ...stats
+      });
+    } catch (error: any) {
+      return NextResponse.json(
+        { error: "Sincronización fallida", details: error.message },
+        { status: 500 }
+      );
+    }
   }
 }

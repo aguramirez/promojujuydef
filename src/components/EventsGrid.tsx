@@ -17,6 +17,26 @@ type Event = {
   instagramPostUrl?: string | null;
 };
 
+const handleInstagramClick = (e: React.MouseEvent, url: string) => {
+  if (typeof window !== "undefined" && typeof navigator !== "undefined") {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      const match = url.match(/(?:\/p\/|\/reel\/|\/tv\/)([A-Za-z0-9_-]+)/);
+      let deepLink = url;
+      if (match && match[1]) {
+        deepLink = `instagram://p/${match[1]}/`;
+      } else {
+        const userMatch = url.match(/instagram\.com\/([A-Za-z0-9_.]+)/);
+        if (userMatch && userMatch[1] && !["p", "reel", "tv", "stories"].includes(userMatch[1])) {
+          deepLink = `instagram://user?username=${userMatch[1]}`;
+        }
+      }
+      window.location.href = deepLink;
+      e.preventDefault();
+    }
+  }
+};
+
 export default function EventsGrid({ events }: { events: Event[] }) {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
 
@@ -91,26 +111,61 @@ export default function EventsGrid({ events }: { events: Event[] }) {
 
                 {/* Action Buttons */}
                 <div className="flex flex-col gap-2 mt-auto">
-                  {event.ctaUrl && event.ctaUrl !== "#" ? (
-                    <a
-                      href={event.ctaUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="w-full flex items-center justify-center gap-2 bg-primary text-white py-3.5 rounded-xl font-bold hover:bg-red-700 transition-colors shadow-md hover:shadow-red-500/20 active:scale-[0.98]"
-                    >
-                      <Ticket className="w-4 h-4" />
-                      Sacar entrada
-                    </a>
-                  ) : (
-                    <button 
-                      disabled 
-                      onClick={(e) => e.stopPropagation()}
-                      className="w-full flex items-center justify-center gap-2 bg-neutral-100 dark:bg-neutral-800 text-neutral-400 py-3.5 rounded-xl font-bold cursor-not-allowed"
-                    >
-                      Entradas no disponibles online
-                    </button>
-                  )}
+                  {(() => {
+                    const isIgUrl = (url?: string | null) => !!(url && (url.includes("instagram.com") || url.startsWith("instagram://")));
+                    const isTicketUrl = (url?: string | null, igUrl?: string | null) => {
+                      if (!url || url === "#" || url.trim() === "") return false;
+                      if (!url.startsWith("http://") && !url.startsWith("https://")) return false;
+                      if (igUrl && url === igUrl) return false;
+                      if (url.includes("instagram.com")) return false;
+                      return true;
+                    };
+
+                    const instagramUrl = event.instagramPostUrl || (isIgUrl(event.ctaUrl) ? event.ctaUrl : null);
+
+                    if (isTicketUrl(event.ctaUrl, event.instagramPostUrl)) {
+                      return (
+                        <a
+                          href={event.ctaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full flex items-center justify-center gap-2 bg-primary text-white py-3.5 rounded-xl font-bold hover:bg-red-700 transition-colors shadow-md hover:shadow-red-500/20 active:scale-[0.98] text-sm"
+                        >
+                          <Ticket className="w-4 h-4" />
+                          Sacar entrada
+                        </a>
+                      );
+                    } else if (instagramUrl) {
+                      return (
+                        <a
+                          href={instagramUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleInstagramClick(e, instagramUrl);
+                          }}
+                          className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 hover:from-pink-600 hover:via-red-600 hover:to-yellow-600 text-white py-3.5 rounded-xl font-bold transition-all shadow-md active:scale-[0.98] text-sm"
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.051.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
+                          </svg>
+                          Ver en Instagram
+                        </a>
+                      );
+                    } else {
+                      return (
+                        <button 
+                          disabled 
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full flex items-center justify-center gap-2 bg-neutral-100 dark:bg-neutral-800 text-neutral-400 py-3.5 rounded-xl font-bold cursor-not-allowed text-sm"
+                        >
+                          Entradas no disponibles online
+                        </button>
+                      );
+                    }
+                  })()}
                   
                   {event.mapsUrl && (
                     <a

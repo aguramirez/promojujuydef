@@ -20,6 +20,26 @@ interface Props {
   onClose: () => void;
 }
 
+const handleInstagramClick = (e: React.MouseEvent, url: string) => {
+  if (typeof window !== "undefined" && typeof navigator !== "undefined") {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      const match = url.match(/(?:\/p\/|\/reel\/|\/tv\/)([A-Za-z0-9_-]+)/);
+      let deepLink = url;
+      if (match && match[1]) {
+        deepLink = `instagram://p/${match[1]}/`;
+      } else {
+        const userMatch = url.match(/instagram\.com\/([A-Za-z0-9_.]+)/);
+        if (userMatch && userMatch[1] && !["p", "reel", "tv", "stories"].includes(userMatch[1])) {
+          deepLink = `instagram://user?username=${userMatch[1]}`;
+        }
+      }
+      window.location.href = deepLink;
+      e.preventDefault();
+    }
+  }
+};
+
 export default function EventDetailModal({ event, onClose }: Props) {
   // Handle back button on mobile
   useEffect(() => {
@@ -143,6 +163,7 @@ export default function EventDetailModal({ event, onClose }: Props) {
                   href={instagramUrl}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(e) => handleInstagramClick(e, instagramUrl)}
                   className="flex items-center justify-center gap-2 bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 hover:from-pink-600 hover:via-red-600 hover:to-yellow-600 text-white py-3 rounded-xl font-semibold transition-all text-sm shadow-md"
                 >
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">

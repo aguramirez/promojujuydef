@@ -97,3 +97,31 @@ export async function DELETE(request: Request) {
     );
   }
 }
+
+// PUT: Toggle active/enabled state of a monitored profile
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, enabled } = body;
+
+    if (!id || enabled === undefined) {
+      return NextResponse.json(
+        { error: "El ID de la cuenta y el estado enabled son requeridos." },
+        { status: 400 }
+      );
+    }
+
+    const updatedProfile = await prisma.monitoredInstagram.update({
+      where: { id },
+      data: { enabled: Boolean(enabled) },
+    });
+
+    return NextResponse.json(updatedProfile);
+  } catch (error: any) {
+    console.error("Error updating monitored Instagram profile:", error);
+    return NextResponse.json(
+      { error: "Error al actualizar la cuenta de Instagram." },
+      { status: 500 }
+    );
+  }
+}

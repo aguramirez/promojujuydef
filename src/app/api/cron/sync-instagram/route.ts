@@ -89,8 +89,10 @@ async function performSync(logger: StreamLogger): Promise<SyncStats> {
   let totalCompletionTokens = 0;
 
   try {
-    // 1. Fetch monitored Instagram accounts from DB
-    const profiles = await prisma.monitoredInstagram.findMany();
+    // 1. Fetch monitored Instagram accounts from DB (only active ones)
+    const profiles = await prisma.monitoredInstagram.findMany({
+      where: { enabled: true }
+    });
     if (profiles.length === 0) {
       logger.log("No monitored Instagram profiles found in DB.", "warn");
       return {
@@ -129,9 +131,7 @@ async function performSync(logger: StreamLogger): Promise<SyncStats> {
           continue;
         }
 
-        // Sleep de 3 segundos para respetar el límite de cuota (15 RPM del tier gratuito)
-        logger.log("Waiting 3 seconds to avoid rate limits...");
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        // No delay since we are on Pay-As-You-Go (Level 1) with higher rate limits
 
         // Usar la foto de perfil de Instagram como fallback si el post no tiene imagen (ej: reels o videos)
         const finalImageUrl = post.imageUrl || post.profilePicUrl || "";

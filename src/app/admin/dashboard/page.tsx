@@ -58,7 +58,7 @@ export default function AdminDashboard() {
   const router = useRouter();
 
   // Instagram automation states
-  const [monitoredAccounts, setMonitoredAccounts] = useState<{ id: string; username: string; storeName: string; createdAt: string }[]>([]);
+  const [monitoredAccounts, setMonitoredAccounts] = useState<{ id: string; username: string; storeName: string; enabled: boolean; createdAt: string }[]>([]);
   const [newInstagramUser, setNewInstagramUser] = useState("");
   const [newInstagramStore, setNewInstagramStore] = useState("");
   const [agentLogs, setAgentLogs] = useState<{ id: string; jobName: string; postsScraped: number; promosAdded: number; eventsAdded: number; promptTokens: number; completionTokens: number; estimatedCost: number; status: string; error?: string | null; createdAt: string }[]>([]);
@@ -271,6 +271,33 @@ export default function AdminDashboard() {
       await fetchInstagramData();
     } else {
       alert("Error al eliminar cuenta");
+    }
+  };
+
+  const handleToggleInstagramEnabled = async (id: string, currentEnabled: boolean) => {
+    const nextEnabled = !currentEnabled;
+    
+    // Optimistic UI update
+    setMonitoredAccounts((prev) =>
+      prev.map((acc) => (acc.id === id ? { ...acc, enabled: nextEnabled } : acc))
+    );
+
+    try {
+      const res = await fetch("/api/admin/instagram", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, enabled: nextEnabled }),
+      });
+      if (!res.ok) {
+        throw new Error("Failed to update status");
+      }
+    } catch (e) {
+      console.error(e);
+      // Revert status on failure
+      setMonitoredAccounts((prev) =>
+        prev.map((acc) => (acc.id === id ? { ...acc, enabled: currentEnabled } : acc))
+      );
+      alert("Error al actualizar el estado de la cuenta.");
     }
   };
 
@@ -740,9 +767,23 @@ export default function AdminDashboard() {
                         key={acc.id}
                         className="flex items-center justify-between bg-neutral-50 dark:bg-neutral-900 px-4 py-3 rounded-xl border border-neutral-200/50 dark:border-neutral-800"
                       >
-                        <div>
-                          <span className="font-bold text-sm text-primary">@{acc.username}</span>
-                          <span className="text-xs text-neutral-500 ml-2">({acc.storeName})</span>
+                        <div className="flex items-center gap-3">
+                          {/* Custom Toggle Switch */}
+                          <button
+                            onClick={() => handleToggleInstagramEnabled(acc.id, acc.enabled)}
+                            className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors duration-300 focus:outline-none ${acc.enabled ? "bg-green-500" : "bg-neutral-300 dark:bg-neutral-700"}`}
+                            aria-label={`Toggle active state for @${acc.username}`}
+                          >
+                            <span
+                              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${acc.enabled ? "translate-x-4" : "translate-x-0"}`}
+                            />
+                          </button>
+                          <div>
+                            <span className={`font-bold text-sm transition-all ${acc.enabled ? "text-primary" : "text-neutral-400 line-through opacity-60"}`}>
+                              @{acc.username}
+                            </span>
+                            <span className="text-xs text-neutral-500 ml-2">({acc.storeName})</span>
+                          </div>
                         </div>
                         <button
                           onClick={() => handleDeleteInstagram(acc.id)}

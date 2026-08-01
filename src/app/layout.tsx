@@ -161,7 +161,11 @@ export default function RootLayout({
             </a>
             
             <p className="text-neutral-400 dark:text-neutral-600 text-[10px] mt-2">
-              © {new Date().getFullYear()} PROMO JUJUY. Todos los derechos reservados.
+              © {new Date().getFullYear()}{" "}
+              <a href="/admin" className="hover:text-neutral-500 transition-colors cursor-default">
+                PROMO JUJUY
+              </a>
+              . Todos los derechos reservados.
             </p>
           </div>
         </footer>

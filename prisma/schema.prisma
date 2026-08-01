@@ -75,6 +75,7 @@ model MonitoredInstagram {
   id        String   @id @default(uuid())
   username  String   @unique
   storeName String
+  enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
 }
 

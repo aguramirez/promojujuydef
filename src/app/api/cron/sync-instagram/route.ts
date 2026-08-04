@@ -6,6 +6,9 @@ import { appGraph } from "@/lib/agents/workflow";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
 
+export const maxDuration = 300; // Aumentar timeout para Vercel/Next.js
+
+
 async function downloadAndCompressImage(url: string): Promise<string> {
   if (!url) return "";
   try {
@@ -107,174 +110,182 @@ async function performSync(logger: StreamLogger): Promise<SyncStats> {
 
     logger.log(`Found ${profiles.length} profiles to synchronize.`);
 
-    // 2. Loop through each monitored account
-    for (const profile of profiles) {
-      logger.log(`Processing Instagram profile @${profile.username} (Store: ${profile.storeName})...`);
-      
-      // Fetch latest 3 posts from Apify
-      logger.log(`Starting Apify Instagram scraper for @${profile.username}...`);
-      const posts = await fetchLatestInstagramPosts(profile.username, 3);
-      logger.log(`Successfully scraped ${posts.length} posts from @${profile.username}`);
-      totalScraped += posts.length;
+    // 2. Fetch latest posts for all profiles in one go using Apify
+    const usernames = profiles.map(p => p.username);
+    logger.log(`Starting Apify Instagram scraper for ${usernames.length} profiles at once...`);
+    const posts = await fetchLatestInstagramPosts(usernames, 3);
+    logger.log(`Successfully scraped ${posts.length} posts in total across all profiles.`);
+    totalScraped += posts.length;
 
-      for (const post of posts) {
-        // Quick exact-link check to avoid running agents on already-processed posts
-        const existingPromo = await prisma.promotion.findFirst({
-          where: { ctaUrl: post.postUrl },
-        });
-        const existingEvent = await prisma.event.findFirst({
-          where: { ctaUrl: post.postUrl },
-        });
+    // 3. Loop through each scraped post
+    for (const post of posts) {
+      const profile = profiles.find(
+        p => p.username.toLowerCase() === (post.ownerUsername || "").toLowerCase()
+      );
 
-        if (existingPromo || existingEvent) {
-          logger.log(`Post URL ${post.postUrl} already processed in DB. Skipping.`, "info");
-          continue;
+      if (!profile) {
+        logger.log(`No matching profile in DB for scraped post from user "${post.ownerUsername}". Skipping.`, "warn");
+        continue;
+      }
+
+      logger.log(`Processing post from @${profile.username} (Store: ${profile.storeName})...`);
+
+      // Quick exact-link check to avoid running agents on already-processed posts
+      const existingPromo = await prisma.promotion.findFirst({
+        where: { ctaUrl: post.postUrl },
+      });
+      const existingEvent = await prisma.event.findFirst({
+        where: { ctaUrl: post.postUrl },
+      });
+
+      if (existingPromo || existingEvent) {
+        logger.log(`Post URL ${post.postUrl} already processed in DB. Skipping.`, "info");
+        continue;
+      }
+
+      // No delay since we are on Pay-As-You-Go (Level 1) with higher rate limits
+
+      // Usar la foto de perfil de Instagram como fallback si el post no tiene imagen (ej: reels o videos)
+      const finalImageUrl = post.imageUrl || post.profilePicUrl || "";
+
+      let storedImageUrl = finalImageUrl;
+      if (finalImageUrl) {
+        logger.log(`Downloading and compressing image for post: ${post.postUrl}`);
+        const base64Image = await downloadAndCompressImage(finalImageUrl);
+        if (base64Image) {
+          storedImageUrl = base64Image;
+          logger.log("Image successfully compressed to WebP");
         }
+      }
 
-        // No delay since we are on Pay-As-You-Go (Level 1) with higher rate limits
+      // Initialize state for the LangGraph agents flow
+      const inputState = {
+        postId: post.id,
+        captionText: post.caption,
+        imageUrl: finalImageUrl,
+        postUrl: post.postUrl,
+        timestamp: post.timestamp,
+        promptTokens: 0,
+        completionTokens: 0,
+        validationErrors: [],
+        isValid: false,
+      };
 
-        // Usar la foto de perfil de Instagram como fallback si el post no tiene imagen (ej: reels o videos)
-        const finalImageUrl = post.imageUrl || post.profilePicUrl || "";
+      logger.log(`Invoking AI agent graph for post: ${post.postUrl}`);
+      const resultState: any = await appGraph.invoke(inputState as any);
 
-        let storedImageUrl = finalImageUrl;
-        if (finalImageUrl) {
-          logger.log(`Downloading and compressing image for post: ${post.postUrl}`);
-          const base64Image = await downloadAndCompressImage(finalImageUrl);
-          if (base64Image) {
-            storedImageUrl = base64Image;
-            logger.log("Image successfully compressed to WebP");
-          }
-        }
+      // Accumulate token usage
+      totalPromptTokens += resultState.promptTokens || 0;
+      totalCompletionTokens += resultState.completionTokens || 0;
 
-        // Initialize state for the LangGraph agents flow
-        const inputState = {
-          postId: post.id,
-          captionText: post.caption,
-          imageUrl: finalImageUrl,
-          postUrl: post.postUrl,
-          timestamp: post.timestamp,
-          promptTokens: 0,
-          completionTokens: 0,
-          validationErrors: [],
-          isValid: false,
-        };
+      // Skip if classified as NONE (informative/not commercial/not event)
+      if (resultState.itemType === "NONE") {
+        logger.log(`Post ${post.id} classified as NONE. Discarding.`, "info");
+        continue;
+      }
 
-        logger.log(`Invoking AI agent graph for post: ${post.postUrl}`);
-        const resultState: any = await appGraph.invoke(inputState as any);
+      // Descartar por completo (no guardar ni como borrador) si el evento ya ocurrió o la promo ya finalizó
+      const isExpired = (resultState.validationErrors || []).some(
+        (err: string) => err.includes("ya ha ocurrido") || err.includes("ya ha finalizado")
+      );
+      if (isExpired) {
+        logger.log(`Post classified as ${resultState.itemType} but is already expired. Discarding completely.`, "warn");
+        continue;
+      }
 
-        // Accumulate token usage
-        totalPromptTokens += resultState.promptTokens || 0;
-        totalCompletionTokens += resultState.completionTokens || 0;
+      const published = resultState.isValid;
 
-        // Skip if classified as NONE (informative/not commercial/not event)
-        if (resultState.itemType === "NONE") {
-          logger.log(`Post ${post.id} classified as NONE. Discarding.`, "info");
-          continue;
-        }
+      // 4. Process Promotion
+      if (resultState.itemType === "PROMOTION" && resultState.extractedPromo) {
+        const promoData = resultState.extractedPromo;
+        const storeName = promoData.storeName || profile.storeName;
+        const title = promoData.title || "Promoción Especial";
+        const description = promoData.description || post.caption;
 
-        // Descartar por completo (no guardar ni como borrador) si el evento ya ocurrió o la promo ya finalizó
-        const isExpired = (resultState.validationErrors || []).some(
-          (err: string) => err.includes("ya ha ocurrido") || err.includes("ya ha finalizado")
+        const textToEmbed = `${title} ${description}`;
+        const promoId = randomUUID();
+
+        // RAG check for semantic duplicates (using pgvector)
+        logger.log(`Checking semantic duplicates for Promotion: '${title}'`);
+        const isDuplicate = await checkDuplicateAndSaveEmbedding(
+          promoId,
+          textToEmbed,
+          "PROMOTION"
         );
-        if (isExpired) {
-          logger.log(`Post classified as ${resultState.itemType} but is already expired. Discarding completely.`, "warn");
+
+        if (isDuplicate) {
+          logger.log(`Promotion '${title}' is a semantic duplicate. Skipping insertion.`, "warn");
           continue;
         }
 
-        const published = resultState.isValid;
-
-        // 3. Process Promotion
-        if (resultState.itemType === "PROMOTION" && resultState.extractedPromo) {
-          const promoData = resultState.extractedPromo;
-          const storeName = promoData.storeName || profile.storeName;
-          const title = promoData.title || "Promoción Especial";
-          const description = promoData.description || post.caption;
-
-          const textToEmbed = `${title} ${description}`;
-          const promoId = randomUUID();
-
-          // RAG check for semantic duplicates (using pgvector)
-          logger.log(`Checking semantic duplicates for Promotion: '${title}'`);
-          const isDuplicate = await checkDuplicateAndSaveEmbedding(
-            promoId,
-            textToEmbed,
-            "PROMOTION"
-          );
-
-          if (isDuplicate) {
-            logger.log(`Promotion '${title}' is a semantic duplicate. Skipping insertion.`, "warn");
-            continue;
-          }
-
-          // Link category semantically if possible
-          let categoryId = null;
-          if (promoData.categoryId) {
-            const cat = await prisma.category.findFirst({
-              where: { name: { contains: promoData.categoryId, mode: "insensitive" } },
-            });
-            if (cat) categoryId = cat.id;
-          }
-
-          await prisma.promotion.create({
-            data: {
-              id: promoId,
-              storeName,
-              title,
-              description,
-              imageUrl: storedImageUrl,
-              startDate: new Date(promoData.startDate || post.timestamp),
-              endDate: new Date(promoData.endDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
-              ctaUrl: promoData.ctaUrl || post.postUrl,
-              instagramPostUrl: post.postUrl,
-              categoryId,
-              dias: promoData.dias || [],
-              published,
-            },
+        // Link category semantically if possible
+        let categoryId = null;
+        if (promoData.categoryId) {
+          const cat = await prisma.category.findFirst({
+            where: { name: { contains: promoData.categoryId, mode: "insensitive" } },
           });
-
-          totalPromosAdded++;
-          logger.log(`Saved Promotion: '${title}' (Published: ${published})`, "info");
-
-        // 4. Process Event
-        } else if (resultState.itemType === "EVENT" && resultState.extractedEvent) {
-          const eventData = resultState.extractedEvent;
-          const storeName = eventData.storeName || profile.storeName;
-          const title = eventData.title || "Evento Especial";
-          const description = eventData.description || post.caption;
-
-          const textToEmbed = `${title} ${description}`;
-          const eventId = randomUUID();
-
-          // RAG check for semantic duplicates (using pgvector)
-          logger.log(`Checking semantic duplicates for Event: '${title}'`);
-          const isDuplicate = await checkDuplicateAndSaveEmbedding(
-            eventId,
-            textToEmbed,
-            "EVENT"
-          );
-
-          if (isDuplicate) {
-            logger.log(`Event '${title}' is a semantic duplicate. Skipping insertion.`, "warn");
-            continue;
-          }
-
-          await prisma.event.create({
-            data: {
-              id: eventId,
-              storeName,
-              title,
-              description,
-              imageUrl: storedImageUrl,
-              date: new Date(eventData.date || post.timestamp),
-              ctaUrl: eventData.ctaUrl || post.postUrl,
-              instagramPostUrl: post.postUrl,
-              published,
-            },
-          });
-
-          totalEventsAdded++;
-          logger.log(`Saved Event: '${title}' (Published: ${published})`, "info");
+          if (cat) categoryId = cat.id;
         }
+
+        await prisma.promotion.create({
+          data: {
+            id: promoId,
+            storeName,
+            title,
+            description,
+            imageUrl: storedImageUrl,
+            startDate: new Date(promoData.startDate || post.timestamp),
+            endDate: new Date(promoData.endDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
+            ctaUrl: promoData.ctaUrl || post.postUrl,
+            instagramPostUrl: post.postUrl,
+            categoryId,
+            dias: promoData.dias || [],
+            published,
+          },
+        });
+
+        totalPromosAdded++;
+        logger.log(`Saved Promotion: '${title}' (Published: ${published})`, "info");
+
+      // 5. Process Event
+      } else if (resultState.itemType === "EVENT" && resultState.extractedEvent) {
+        const eventData = resultState.extractedEvent;
+        const storeName = eventData.storeName || profile.storeName;
+        const title = eventData.title || "Evento Especial";
+        const description = eventData.description || post.caption;
+
+        const textToEmbed = `${title} ${description}`;
+        const eventId = randomUUID();
+
+        // RAG check for semantic duplicates (using pgvector)
+        logger.log(`Checking semantic duplicates for Event: '${title}'`);
+        const isDuplicate = await checkDuplicateAndSaveEmbedding(
+          eventId,
+          textToEmbed,
+          "EVENT"
+        );
+
+        if (isDuplicate) {
+          logger.log(`Event '${title}' is a semantic duplicate. Skipping insertion.`, "warn");
+          continue;
+        }
+
+        await prisma.event.create({
+          data: {
+            id: eventId,
+            storeName,
+            title,
+            description,
+            imageUrl: storedImageUrl,
+            date: new Date(eventData.date || post.timestamp),
+            ctaUrl: eventData.ctaUrl || post.postUrl,
+            instagramPostUrl: post.postUrl,
+            published,
+          },
+        });
+
+        totalEventsAdded++;
+        logger.log(`Saved Event: '${title}' (Published: ${published})`, "info");
       }
     }
 
